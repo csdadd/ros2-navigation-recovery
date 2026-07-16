@@ -2,6 +2,8 @@
 
 ROS2 (Humble/Jazzy) multi-agent navigation system with intelligent recovery strategies for undergraduate thesis.
 
+Architecture diagrams and flowcharts are available in [`docs/diagrams/`](docs/diagrams/).
+
 ## Packages
 
 | Package | Description |
