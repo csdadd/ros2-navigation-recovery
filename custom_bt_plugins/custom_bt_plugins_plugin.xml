@@ -1,0 +1,23 @@
+<library path="is_footprint_in_collision">
+  <class name="IsFootprintInCollision"
+         type="custom_bt_plugins::IsFootprintInCollision"
+         base_class_type="BT::ConditionNode">
+    <description>
+      检测机器人 footprint 是否与障碍物重叠。
+      当 footprint 代价 >= INSCRIBED_INFLATED_OBSTACLE 时返回 SUCCESS（碰撞），
+      否则返回 FAILURE（无碰撞）。
+    </description>
+  </class>
+</library>
+
+<library path="publish_intervention_status">
+  <class name="PublishInterventionStatus"
+         type="custom_bt_plugins::PublishInterventionStatus"
+         base_class_type="BT::SyncActionNode">
+    <description>
+      发布人工干预状态到 /manual_intervention 话题。
+      当导航进入人工干预阶段时，发布 true 表示需要人工干预。
+      外部程序可以订阅该话题来监听人工干预事件。
+    </description>
+  </class>
+</library>

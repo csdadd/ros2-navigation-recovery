@@ -1,0 +1,313 @@
+'custom_bt_plugins'是行为树插件功能包
+'gazebo_simulation'是gazebo仿真环境功能包
+'robot_navigation2'是包含恢复算法的nav2导航功能包
+'robo_nav2_hmi'是机器人人机交互界面功能包
+
+'galictic版本恢复算法功能包\custom_bt_plugins'是适配于实机机器人的行为树插件功能包
+'galictic版本恢复算法功能包\wheeltec_robot_nav2'是包含恢复算法的运行于实机机器人的nav2导航算法
+
+================================================================================
+一、custom_bt_plugins（行为树插件功能包）
+================================================================================
+
+【功能概述】
+为 Nav2 导航框架提供自定义 BehaviorTree 节点，用于智能恢复策略。
+
+【目录结构】
+  include/custom_bt_plugins/
+    is_footprint_in_collision.hpp    -- 检测 footprint 碰撞的条件节点
+    publish_intervention_status.hpp  -- 发布人工干预状态的动作节点
+  src/
+    is_footprint_in_collision.cpp
+    publish_intervention_status.cpp
+  custom_bt_plugins_plugin.xml      -- BT 插件注册文件（注册给 nav2_behavior_tree）
+  CMakeLists.txt
+  package.xml
+
+【自定义 BehaviorTree 节点】
+  -- IsFootprintInCollision（条件节点）
+     功能：检测机器人 footprint 是否与局部代价地图中的障碍物重叠。
+     逻辑：遍历 footprint 多边形覆盖的代价地图网格，若任一网格的代价
+           >= INSCRIBED_INFLATED_OBSTACLE，返回 SUCCESS（碰撞），
+           否则返回 FAILURE（无碰撞）。
+     输入端口：
+       costmap_topic  -- 代价地图话题（默认 /local_costmap/costmap_raw）
+       footprint_topic -- footprint 话题（默认 /local_costmap/published_footprint）
+
+  -- PublishInterventionStatus（同步动作节点）
+     功能：向 /manual_intervention 话题发布人工干预状态。
+     逻辑：发布 std_msgs::msg::Bool，true 表示需要人工干预，
+           false 表示取消人工干预。
+     输入端口：status（bool，发布的状态值）
+
+================================================================================
+二、gazebo_simulation（Gazebo 仿真环境功能包）
+================================================================================
+
+【功能概述】
+提供 Gazebo Ignition/Classic 仿真环境，包含多构型机器人模型、
+仿真世界和启动配置。
+
+【目录结构】
+  launch/
+    ackermann_gazebo_sim.launch.py      -- 阿克曼构型仿真启动文件
+    differential_gazebo_sim.launch.py   -- 差速构型仿真启动文件
+  urdf/
+    robot_ackermann/     -- 阿克曼转向机器人 URDF 模型
+    robot_differential/  -- 差速驱动机器人 URDF 模型
+  world/
+    custom_room.world              -- 自定义房间仿真世界
+    simulation_environment.world   -- 仿真环境世界
+    testCar.world                  -- 测试车辆世界
+    room/                          -- 房间模型资源
+  Model/
+    simulationModel.dae  -- 3D 仿真模型（COLLADA 格式）
+    Image_*.jpg          -- 模型贴图纹理
+  config/                -- 仿真配置文件
+
+【支持构型】
+  -- 阿克曼转向（Ackermann）：适用于类汽车型机器人
+  -- 差速驱动（Differential）：适用于两轮差速机器人
+
+【依赖项】
+  robot_state_publisher, joint_state_publisher, gazebo_ros2_control,
+  ros2_controllers, xacro, gazebo_ros, nav2_msgs
+
+================================================================================
+三、robot_navigation2（Nav2 导航与恢复算法功能包）
+================================================================================
+
+【功能概述】
+基于 Nav2 框架的多航点导航系统，核心特性：
+  -- 支持航点顺序导航 + 航点等待时间配置
+  -- 智能三级恢复策略（卡住/碰撞/未知障碍物）
+  -- 阿克曼构型与差速构型两套行为树
+  -- 最终兜底：人工干预预警机制
+
+【目录结构】
+  action/
+    FollowWaypointsWithWait.action  -- 自定义 ROS2 Action 定义（带等待时间的航点跟随）
+  behavior_trees/
+    intelligent_recovery_ackermann.xml     -- 阿克曼构型智能恢复行为树
+    intelligent_recovery_differential.xml  -- 差速构型智能恢复行为树
+    行为树逻辑.md                          -- 行为树逻辑说明文档（含流程图）
+  config/
+    nav2_params_ackermann.yaml     -- 阿克曼构型 Nav2 参数配置
+    nav2_params_differential.yaml  -- 差速构型 Nav2 参数配置
+    test_waypoints.yaml            -- 测试航点文件
+    nav2.rviz                      -- RViz2 可视化配置
+  plugins/
+    wait_at_waypoint_with_time.xml -- 航点等待插件注册文件
+  src/
+    main.cpp                       -- waypoint_follower_with_wait 节点入口
+    waypoint_follower_with_wait.cpp -- 航点跟随服务器（支持航点等待）
+    wait_at_waypoint_with_time.cpp  -- 航点等待行为插件
+    initpose_service.cpp           -- 初始位姿设置服务
+    bt_log_monitor.cpp             -- 行为树日志监控节点
+    waypoint_runner_client.cpp     -- 航点运行客户端（解析 YAML + 发送 Action 目标）
+    waypoint_runner_main.cpp       -- 航点运行客户端入口
+  launch/
+    navigation2_ackermann.launch.py     -- 阿克曼构型导航启动
+    navigation2_differential.launch.py  -- 差速构型导航启动
+    rviz2.launch.py                     -- RViz2 可视化启动
+  maps/
+    room.yaml / room.pgm           -- 房间地图
+    simulationMap.yaml / simulationMap.pgm -- 仿真地图
+  test/
+    test_final_recovery.cpp        -- 行为树单元测试
+
+【智能恢复策略（三级恢复）】
+  整个恢复策略基于行为树实现，在 FollowPath 失败后根据检测结果分三个分支：
+
+  分支一：卡住分支（IsStuck = SUCCESS）
+    条件：检测到机器人出现负加速度，说明撞到了障碍物。
+    动作：执行 BackUp 后退 0.25m（阿克曼）/ 0.40m（差速无 Spin）。
+
+  分支二：碰撞分支（IsStuck = FAILURE 且 IsFootprintInCollision = SUCCESS）
+    条件：footprint 与代价地图中的障碍物重叠。
+    动作：ClearCostmap → BackUp 0.15m → 尝试 ComputePathToPose
+         → 若失败则 DriveOnHeading 0.3m → 再次尝试 ComputePathToPose。
+
+  分支三：未知障碍物分支（IsStuck = FAILURE 且 IsFootprintInCollision = FAILURE）
+    条件：被看不见的障碍物卡住（如墙角、玻璃等）。
+    动作：BackUp → DriveOnHeading（不清理代价地图）。
+
+  【规划失败恢复（4 级渐进策略）】
+    恢复 1：等待探测 2 秒（阿克曼不支持 Spin，用 Wait 替代）
+    恢复 2：根据碰撞状态选择移动方向
+    恢复 3：清除局部代价地图
+    恢复 4：清除全局代价地图
+
+  【最终兜底】
+    所有恢复尝试均失败后，触发人工干预预警：
+    ForceFailure 包装 PublishInterventionStatus，循环 10 次发布
+    /manual_intervention = true，等待 60 秒人工介入。
+
+【可执行节点】
+  waypoint_follower_with_wait_node  -- 航点跟随导航主节点
+  waypoint_runner_client            -- 航点运行客户端（解析 YAML 航点文件）
+  initpose_service                  -- 初始位姿设置服务节点
+  bt_log_monitor                    -- 行为树日志监控节点
+
+【依赖项】
+  custom_bt_plugins, nav2_core, nav2_util, nav2_msgs, pluginlib,
+  yaml-cpp, behaviortree_cpp_v3
+
+================================================================================
+四、robo_nav2_hmi（机器人人机交互界面功能包）
+================================================================================
+
+【功能概述】
+基于 Qt5 的 ROS2 机器人导航人机交互界面。采用三线程架构设计，
+提供地图可视化、导航控制、日志管理、用户认证等完整功能。
+
+【三线程架构】
+  -- 主线程（GUI）：Qt 界面渲染与用户交互（MainWindow）
+  -- 工作线程：
+       RobotStatusThread    -- 机器人状态采集线程（位姿、速度、传感器数据）
+       SystemMonitorThread  -- 系统监控线程（CPU、内存、ROS 话题状态）
+       LogThread            -- 日志采集线程（订阅 ROS2 日志话题）
+  -- 动作线程：
+       NavigationActionThread  -- 导航动作线程（发送导航目标、取消导航）
+  -- 参数线程：
+       Nav2ParameterThread     -- Nav2 参数读写线程（动态参数配置）
+
+【功能模块】
+  -- 用户认证系统
+     UserAuthManager         -- 用户认证管理器（登录验证、权限管理）
+     LoginDialog             -- 登录对话框
+     UserManagementDialog    -- 用户管理对话框（管理员功能）
+     ChangePasswordDialog    -- 修改密码对话框
+     AddUserDialog           -- 添加用户对话框
+     UserStorageEngine       -- 用户数据存储引擎（SQLite 持久化）
+
+  -- 地图可视化
+     MapLoader               -- 地图加载器（支持 PGM/YAML 格式）
+     MapCache                -- 地图瓦片缓存
+     MapConverter            -- 地图坐标转换
+     MapMarker               -- 地图标记（航点、机器人位置标记）
+     PathVisualizer          -- 全局路径可视化
+     CoordinateTransformer   -- 坐标系转换工具（map ↔ odom ↔ base_link）
+
+  -- Nav2 视图面板
+     Nav2ViewWidget          -- Nav2 导航状态视图组件
+     Nav2ViewDataProcessor   -- Nav2 数据处理器（订阅/解析 Nav2 话题）
+
+  -- 日志系统
+     LogThread               -- 日志采集线程（订阅 /rosout）
+     LogTableModel           -- Qt 表格模型（实时日志）
+     LogFilterProxyModel     -- 日志过滤器代理模型
+     LogQueryTask            -- 日志查询任务（历史日志检索）
+     HistoryLogModel         -- 历史日志数据模型
+     LogStorageEngine        -- 日志持久化存储引擎（SQLite）
+
+  -- 系统监控
+     SystemMonitorThread     -- 系统资源监控（CPU/内存/ROS 图状态）
+     StatusIndicator         -- 状态指示灯组件（连接状态/导航状态）
+
+  -- 导航控制
+     NavigationActionThread  -- 导航动作线程（WaypointFollower Action 客户端）
+     RosContextManager       -- ROS2 上下文管理器
+
+  -- 工具类
+     ThreadSafeQueue<T>      -- 线程安全队列模板
+     GeometryUtils           -- 几何计算工具
+     TimeUtils               -- 时间格式化工具
+     LogUtils                -- 日志工具函数
+     RenderData              -- 渲染数据结构体
+
+【关键源文件】
+  main.cpp                    -- 应用入口，初始化 ROS2 + Qt + 三线程
+  mainwindow.cpp / .h / .ui   -- 主窗口（~85KB，核心 UI 逻辑）
+
+【依赖项】
+  rclcpp, rclcpp_action, nav2_msgs, nav_msgs, geometry_msgs,
+  sensor_msgs, diagnostic_msgs, tf2, tf2_ros, tf2_geometry_msgs,
+  Qt5 (Widgets, Concurrent, Sql, Test), yaml-cpp
+
+================================================================================
+五、galictic版本恢复算法功能包（实机适配版本）
+================================================================================
+
+【功能概述】
+在仿真版本（custom_bt_plugins + robot_navigation2）的基础上，
+针对 Wheeltec 实机机器人进行适配，支持多种底盘构型和硬件参数配置。
+
+【子包：custom_bt_plugins】
+  相比仿真版增加：
+  -- move_forward_action（MoveForward 恢复行为）
+     基于 nav2_msgs::action::MoveForward 实现前进指定距离的恢复动作。
+     输入参数：forward_dist（前进距离，m）、speed（速度，m/s）。
+
+  其他插件同仿真版：
+  -- IsFootprintInCollision（碰撞检测条件节点）
+  -- PublishInterventionStatus（人工干预状态发布）
+
+  export 增加 nav2_core 的 recovery_plugin.xml 注册，
+  支持 nav2_recoveries 框架加载。
+
+【子包：wheeltec_robot_nav2】
+  面向 Wheeltec 系列实机机器人的完整导航功能包，描述为
+  "Custom navigation features for Wheeltec mini_akm robot"。
+
+  目录结构：
+    launch/
+      bringup_launch.py            -- 机器人启动文件
+      wheeltec_nav2.launch.py     -- Nav2 导航启动文件
+      navigation_launch.py        -- 导航组件启动
+      initpose_service.launch.py  -- 初始位姿设置服务启动
+      save_map.launch.py          -- 地图保存启动
+      waypoint_follower_with_wait.launch.py  -- 航点跟随启动
+
+    behavior_trees/
+      intelligent_recovery_ackermann.xml  -- 阿克曼构型智能恢复行为树
+
+    param/wheeltec_param/   -- 实机参数文件（覆盖 30+ 种底盘型号）：
+      ├── mini 系列：mini_akm, mini_diff, mini_mec, mini_omni, mini_tank, mini_4wd
+      ├── senior 系列：senior_akm, senior_diff, senior_mec_bs/dl, senior_omni,
+      │                senior_4wd_bs/dl, senior_mec_EightDrive
+      ├── flagship 系列：flagship_4wd_bs/dl, flagship_four_wheel_diff_bs/dl,
+      │                   flagship_mec_bs/dl
+      ├── top 系列：top_akm_bs/dl, top_mec_bs/dl, top_omni,
+      │             top_4wd_bs/dl, top_mec_EightDrive
+      ├── brushless_senior_diff（无刷 senior 差速）
+      └── MPPI 演示：wheeltec_akm_mppi_demo, wheeltec_diff_mppi_demo,
+                     wheeltec_mec_mppi_demo
+
+    plugins/
+      publish_intervention_status.xml  -- 干预状态发布 BT 插件注册
+      wait_at_waypoint_with_time.xml   -- 航点等待插件注册
+
+    src/
+      main.cpp                        -- 导航节点入口
+      publish_intervention_status.cpp -- 干预状态发布实现
+
+    action/
+      FollowWaypointsWithWait.action  -- 航点跟随 Action 定义
+
+    map/
+      WHEELTEC.pgm / WHEELTEC.yaml    -- 实机测试地图
+
+    rviz/
+      wheeltec.rviz                   -- 实机 RViz 配置
+
+    config/
+      waypoints.yaml                  -- 航点配置文件
+
+【仿真版与实机版对照关系】
+  仿真版                         实机版
+  ─────────────────────────────────────────────────
+  custom_bt_plugins          →  galictic版本\custom_bt_plugins（增加 MoveForward）
+  robot_navigation2          →  galictic版本\wheeltec_robot_nav2（增加实机参数）
+
+【构建方式】
+  所有功能包均为 ROS2 (Humble/Jazzy) ament_cmake 构建类型。
+  在 ROS2 工作空间的 src 目录下放置各功能包后，
+  使用 colcon build --packages-select <包名> 进行编译。
+  实机版需在 Wheeltec 机器人车载工控机上编译运行。
+
+【运行流程】
+  1. 启动 Gazebo 仿真环境（或实机驱动）
+  2. 启动 Nav2 导航栈（robot_navigation2 / wheeltec_robot_nav2）
+  3. 启动行为树日志监控（bt_log_monitor）
+  4. 启动人机交互界面（robo_nav2_hmi）进行可视化和控制

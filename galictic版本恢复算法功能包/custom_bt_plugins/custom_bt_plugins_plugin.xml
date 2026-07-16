@@ -1,0 +1,36 @@
+<library path="is_footprint_in_collision">
+  <class name="IsFootprintInCollision"
+         type="custom_bt_plugins::IsFootprintInCollision"
+         base_class_type="BT::ConditionNode">
+    <description>
+      检测机器人 footprint 是否与障碍物重叠。
+      当 footprint 代价 >= INSCRIBED_INFLATED_OBSTACLE 时返回 SUCCESS（碰撞），
+      否则返回 FAILURE（无碰撞）。
+    </description>
+  </class>
+</library>
+
+<library path="publish_intervention_status">
+  <class name="PublishInterventionStatus"
+         type="custom_bt_plugins::PublishInterventionStatus"
+         base_class_type="BT::SyncActionNode">
+    <description>
+      发布人工干预状态到 /manual_intervention 话题。
+      当导航进入人工干预阶段时，发布 true 表示需要人工干预。
+      外部程序可以订阅该话题来监听人工干预事件。
+    </description>
+  </class>
+</library>
+
+<library path="move_forward_action">
+  <class name="MoveForward"
+         type="custom_bt_plugins::MoveForwardAction"
+         base_class_type="BT::ActionNode">
+    <description>
+      MoveForward 恢复行为，使机器人前进指定距离。
+      基于 nav2_msgs::action::MoveForward 实现。
+      参数：forward_dist（前进距离，米），speed（速度，米/秒）。
+    </description>
+  </class>
+</library>
+

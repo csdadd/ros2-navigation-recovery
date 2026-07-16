@@ -1,0 +1,53 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+<xacro:include filename="$(find gazebo_simulation)/urdf/robot_ackermann/common_inertia.xacro" />
+
+<xacro:macro name="steering_wheel_xacro" params="wheel_name xyz">
+    <!-- 转向关节 (revolute, 绕Z轴旋转) -->
+    <joint name="${wheel_name}_steering_joint" type="revolute">
+        <parent link="base_link" />
+        <child link="${wheel_name}_steering_link" />
+        <origin xyz="${xyz}" />
+        <axis xyz="0 0 1" />
+        <limit lower="-0.5" upper="0.5" effort="1.0" velocity="1.0" />
+    </joint>
+
+    <!-- 转向链接 -->
+    <link name="${wheel_name}_steering_link">
+        <xacro:box_inertia m="0.01" w="0.01" h="0.01" d="0.01" />
+    </link>
+
+    <!-- 轮子关节 (continuous, 绕Y轴旋转) -->
+    <joint name="${wheel_name}_joint" type="continuous">
+        <parent link="${wheel_name}_steering_link" />
+        <child link="${wheel_name}_link" />
+        <origin xyz="0 0 0" />
+        <axis xyz="0 1 0" />
+    </joint>
+
+    <!-- 轮子链接 (复用现有轮子尺寸) -->
+    <link name="${wheel_name}_link">
+        <visual>
+            <origin xyz="0 0 0" rpy="1.57079 0 0" />
+            <geometry>
+                <cylinder length="0.04" radius="0.032" />
+            </geometry>
+            <material name="yellow">
+                <color rgba="1.0 1.0 0.0 0.8" />
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0 0 0" rpy="1.57079 0 0" />
+            <geometry>
+                <cylinder length="0.04" radius="0.032" />
+            </geometry>
+        </collision>
+        <xacro:cylinder_inertia m="0.05" r="0.032" h="0.04" />
+    </link>
+
+    <gazebo reference="${wheel_name}_link">
+        <mu1 value="20.0" />
+        <mu2 value="20.0" />
+    </gazebo>
+</xacro:macro>
+</robot>

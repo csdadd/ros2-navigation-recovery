@@ -1,0 +1,35 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="fishbot">
+    <!-- 复用基础底盘和传感器模块 -->
+    <xacro:include filename="$(find gazebo_simulation)/urdf/robot_ackermann/base.urdf.xacro" />
+    <xacro:include filename="$(find gazebo_simulation)/urdf/robot_ackermann/sensor/imu.urdf.xacro" />
+    <xacro:include filename="$(find gazebo_simulation)/urdf/robot_ackermann/sensor/laser.urdf.xacro" />
+    <xacro:include filename="$(find gazebo_simulation)/urdf/robot_ackermann/sensor/camera.urdf.xacro" />
+
+    <!-- 阿克曼转向执行器 -->
+    <xacro:include filename="$(find gazebo_simulation)/urdf/robot_ackermann/actuator/steering_wheel.urdf.xacro" />
+    <xacro:include filename="$(find gazebo_simulation)/urdf/robot_ackermann/actuator/rear_wheel.urdf.xacro" />
+
+    <!-- Gazebo 传感器插件 -->
+    <xacro:include filename="$(find gazebo_simulation)/urdf/robot_ackermann/plugins/gazebo_sensor_plugin.xacro" />
+
+    <!-- ROS 2 Control -->
+    <xacro:include filename="$(find gazebo_simulation)/urdf/robot_ackermann/robot.ros2_control.xacro" />
+
+    <!-- 实例化 -->
+    <xacro:base_xacro length="0.20" width="0.12" height="0.04" />
+    <xacro:imu_xacro xyz="0 0 0.006" />
+    <xacro:laser_xacro xyz="0 0 0.04" />
+    <xacro:camera_xacro xyz="0.10 0 0.03" />
+
+    <!-- 前转向轮 (wheelbase/2 = 0.08m 前方) -->
+    <xacro:steering_wheel_xacro wheel_name="front_left_wheel" xyz="0.08 0.08 -0.04" />
+    <xacro:steering_wheel_xacro wheel_name="front_right_wheel" xyz="0.08 -0.08 -0.04" />
+
+    <!-- 后驱动轮 (wheelbase/2 = 0.08m 后方) -->
+    <xacro:rear_wheel_xacro wheel_name="rear_left_wheel" xyz="-0.08 0.08 -0.04" />
+    <xacro:rear_wheel_xacro wheel_name="rear_right_wheel" xyz="-0.08 -0.08 -0.04" />
+
+    <xacro:gazebo_sensor_plugin />
+    <xacro:robot_ros2_control />
+</robot>

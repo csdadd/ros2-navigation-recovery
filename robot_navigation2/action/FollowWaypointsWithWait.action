@@ -1,0 +1,9 @@
+# Goal
+geometry_msgs/PoseStamped[] poses
+int32[] wait_times_ms
+---
+# Result
+int32[] missed_waypoints
+---
+# Feedback
+uint32 current_waypoint

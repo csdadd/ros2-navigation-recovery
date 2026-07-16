@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<!-- 测试 FinalRecoveryFallback 子树: 验证 ForceFailure 立即结束导航而非等待 60s -->
+<root main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <ReactiveFallback name="FinalRecoveryFallback">
+      <GoalUpdated/>
+      <Sequence name="ManualInterventionAlert">
+        <ForceFailure>
+          <Decorator ID="RetryUntilSuccessful" num_attempts="10">
+            <Action ID="PublishInterventionStatus" status="true"/>
+          </Decorator>
+        </ForceFailure>
+      </Sequence>
+    </ReactiveFallback>
+  </BehaviorTree>
+</root>

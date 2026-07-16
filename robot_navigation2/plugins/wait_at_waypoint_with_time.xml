@@ -1,0 +1,8 @@
+<library path="wait_at_waypoint_with_time">
+  <class type="recovery_test_nav::WaitAtWaypointWithTime" base_class_type="nav2_core::WaypointTaskExecutor">
+    <description>
+      A waypoint task executor plugin that waits for a specified duration at each waypoint.
+      The wait time is dynamically set per waypoint by the waypoint follower.
+    </description>
+  </class>
+</library>

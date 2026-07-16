@@ -1,0 +1,103 @@
+<?xml version="1.0"?>
+<!--
+  Nav2 智能恢复行为树 - 阿克曼构型版本
+  不支持原地旋转 (Spin)，使用 BackUp 替代
+
+  恢复策略:
+  - 规划失败: 等待探测 → 小范围后退 → 清除局部地图 → 清除全局地图
+  - 跟踪失败: 根据 IsStuck 和 IsFootprintInCollision 区分失败类型
+    - 卡住分支 (IsStuck=SUCCESS): 检测到负加速度，撞到障碍物 → 只后退
+    - 碰撞分支 (IsStuck=FAILURE 且 IsFootprintInCollision=SUCCESS): footprint与障碍物重叠 → ClearCostmap → 后退0.15m → 尝试计算path → (失败则)前进0.3m → 尝试计算path
+    - 未知障碍物分支 (两者都=FAILURE): 被看不到的障碍物卡住 → BackUp → DriveOnHeading
+  - 最终兜底: 等待60秒人工干预
+-->
+<root main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <RecoveryNode number_of_retries="5" name="NavigateRecovery">
+      <PipelineSequence name="NavigateWithReplanning">
+
+        <!-- 规划失败恢复：4级渐进策略（无Spin） -->
+        <RateController hz="1.0">
+          <RecoveryNode number_of_retries="1" name="PlanningRecovery4">
+            <RecoveryNode number_of_retries="1" name="PlanningRecovery3">
+              <RecoveryNode number_of_retries="1" name="PlanningRecovery2">
+                <RecoveryNode number_of_retries="1" name="PlanningRecovery1">
+                  <ComputePathToPose goal="{goal}" path="{path}" planner_id="GridBased"/>
+                  <!-- 恢复1: 等待探测（阿克曼不支持Spin） -->
+                  <Wait wait_duration="2.0"/>
+                </RecoveryNode>
+                <!-- 恢复2: 根据碰撞状态选择移动方向 -->
+                <ReactiveFallback name="Recovery2MovementSelector">
+                  <!-- 碰撞分支: footprint与障碍物重叠，前进脱离 -->
+                  <Sequence name="CollisionMoveForward">
+                    <IsFootprintInCollision name="CheckCollision2"
+                                            costmap_topic="/local_costmap/costmap_raw"
+                                            footprint_topic="/local_costmap/published_footprint"/>
+                    <ComputePathToPose goal="{goal}" path="{path}" planner_id="GridBased"/>
+                  </Sequence>
+                  <!-- 非碰撞分支: 后退 -->
+                  <BackUp backup_dist="0.15" backup_speed="0.05" time_allowance="10"/>
+                </ReactiveFallback>
+              </RecoveryNode>
+              <!-- 恢复3: 清除局部代价图 -->
+              <ClearEntireCostmap service_name="local_costmap/clear_entirely_local_costmap" server_timeout="5.0"/>
+            </RecoveryNode>
+            <!-- 恢复4: 清除全局代价图 -->
+            <ClearEntireCostmap service_name="global_costmap/clear_entirely_global_costmap" server_timeout="5.0"/>
+          </RecoveryNode>
+        </RateController>
+
+        <!-- 跟踪失败恢复：根据 IsStuck 区分失败类型（无Spin） -->
+        <RecoveryNode number_of_retries="2" name="FollowPathRecovery">
+          <FollowPath path="{path}" controller_id="FollowPath"/>
+
+          <!-- 根据 IsStuck 和 IsFootprintInCollision 结果选择恢复策略 -->
+          <ReactiveFallback name="RecoverySelector">
+            <!-- 卡住分支: IsStuck=SUCCESS，检测到负加速度，撞到障碍物，只后退 -->
+            <Sequence name="StuckRecovery">
+              <IsStuck name="CheckStuck"/>
+              <BackUp backup_dist="0.40" backup_speed="0.05" time_allowance="10"/>
+              <ComputePathToPose goal="{goal}" path="{path}" planner_id="GridBased"/>
+            </Sequence>
+
+            <!-- 碰撞分支: IsStuck=FAILURE 且 IsFootprintInCollision=SUCCESS，footprint与障碍物重叠 -->
+            <!-- 恢复流程: 清除地图 → 后退0.15m → 尝试计算path → (失败则)前进0.3m → 尝试计算path -->
+            <Sequence name="CollisionRecovery">
+              <IsFootprintInCollision name="CheckFootprintCollision"
+                                      costmap_topic="/local_costmap/costmap_raw"
+                                      footprint_topic="/local_costmap/published_footprint"/>
+              <ClearEntireCostmap service_name="local_costmap/clear_entirely_local_costmap" server_timeout="5.0"/>
+              <RecoveryNode number_of_retries="1" name="CollisionPathRecovery2">
+                <RecoveryNode number_of_retries="1" name="CollisionPathRecovery1">
+                  <ComputePathToPose goal="{goal}" path="{path}" planner_id="GridBased"/>
+                  <BackUp backup_dist="0.15" backup_speed="0.05" time_allowance="10"/>
+                </RecoveryNode>
+                <DriveOnHeading dist_to_travel="0.3" speed="0.05" time_allowance="10"/>
+              </RecoveryNode>
+            </Sequence>
+
+            <!-- 未知障碍物分支: IsStuck=FAILURE 且 IsFootprintInCollision=FAILURE，被看不到的障碍物卡住（如墙角），大幅后退后重新规划 -->
+            <Sequence name="UnknownObstacleRecovery">
+              <BackUp backup_dist="0.50" backup_speed="0.05" time_allowance="15"/>
+              <ComputePathToPose goal="{goal}" path="{path}" planner_id="GridBased"/>
+            </Sequence>
+          </ReactiveFallback>
+        </RecoveryNode>
+
+      </PipelineSequence>
+
+      <!-- 最终兜底：人工干预预警 -->
+      <ReactiveFallback name="FinalRecoveryFallback">
+        <GoalUpdated/>
+        <Sequence name="ManualInterventionAlert">
+          <ForceFailure>
+            <Decorator ID="RetryUntilSuccessful" num_attempts="10">
+              <Action ID="PublishInterventionStatus" status="true"/>
+            </Decorator>
+          </ForceFailure>
+        </Sequence>
+      </ReactiveFallback>
+
+    </RecoveryNode>
+  </BehaviorTree>
+</root>
